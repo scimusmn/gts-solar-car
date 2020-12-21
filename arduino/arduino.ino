@@ -5,19 +5,19 @@
 #include <Adafruit_NeoPixel.h>
 #include <Wire.h>
 
-const int LightRelayPIN = 3;
+const int lampPIN = 3; // pwm via Mosfet of halogen lamp
 const int HardStartBtn = 4;
 const int HardBtnLED = 5;
-const int HallLinePIN = 6;
-const int LEDRingPIN = 7;
+const int HallLinePIN = 6; // hall sensor input on starting/finish line
+const int LEDRingPIN = 7;  // neopixel pin
 const int MedStartBtn = 8;
 const int MedBtnLED = 9;
-const int MotorPIN = 10;
-const int EncoderPIN = 11;
+const int MotorPIN = 10;   // pwm signal on this pin drives motor speed
+const int EncoderPIN = 11; // signal from encoder determines car position.
 const int EasyStartBtn = 12;
 const int EasyBtnLED = 13;
-const int EasyTimePot = A0;
-const int HardTimePot = A2;
+const int EasyTimePot = A0; // potentiometer used to set easy race time for win.
+const int HardTimePot = A2; // potentiometer used to set had race time for win.
 
 const int NUM_LEDS = 48;
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, LEDRingPIN, NEO_RGB + NEO_KHZ800);
@@ -25,12 +25,12 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, LEDRingPIN, NEO_RGB + NEO_
 int lapsToWin = 1;       // The number of laps to be completed for win.
 long timeToRace = 20000; // in millisec, time you have to complete the designated # of laps.
 
-int resetting = 1, racing = 0, hasWon = 1, ledState = 0, encoderLastRead = 0; // flags
+bool isResetting = 1, isRacing = 0, hasWon = 1, ledState = 0, encoderLastRead = 0; // flags
 int lapCounter, currentSpeed = 0, targetSpeed, position;
-int timingIndexLED;
+int paceCarFirstLED; // index number for neopixel strip to create 4 pixel pace car.
 unsigned long startMillis = 0, previousTimingMillis, previousBlinkMillis, previousRampMillis, currentMillis = 0;
 long timeElapsed = 0;
-int hallLineState = 0, hallLinePrevState; // variables for reading and storing the hall sensors status hallBeforeState, hallBeforePrevState,
+int hallLineState = 0, hallLinePrevState; // variables for edge detection of the hall sensor
 
 void setup()
 {
@@ -39,7 +39,7 @@ void setup()
   allLEDS(0, 0, 255); //all leds to blue, show life!
 
   pinMode(HallLinePIN, INPUT_PULLUP);
-  pinMode(LightRelayPIN, OUTPUT);
+  pinMode(lampPIN, OUTPUT);
   pinMode(HardStartBtn, INPUT);
   pinMode(HardBtnLED, OUTPUT);
   pinMode(MedStartBtn, INPUT);
@@ -51,7 +51,6 @@ void setup()
   pinMode(EasyTimePot, INPUT);
   pinMode(HardTimePot, INPUT);
 
-  Serial.begin(9600);
   analogWrite(MotorPIN, 0);
   delay(1000);
   allLEDS(0, 0, 0); // turn leds off
@@ -71,16 +70,17 @@ void loop()
   }
 
   // blink lights during reset according to win or lose.
-  if (resetting)
+  if (isResetting)
   {
+    int j = 0;
     if (hasWon)
-    { // create rainbow pattern. ledState used to change color wheel.
+    { // create rainbow pattern.
       for (int i = 0; i < strip.numPixels(); i++)
       {
-        strip.setPixelColor(i, Wheel((i + ledState) & 255));
+        strip.setPixelColor(i, Wheel((i + j) & 255));
       }
       strip.show();
-      ledState++;
+      j++;
     }
     else
     { // lose lights, blinking red, ledState toggles off/on
@@ -120,7 +120,6 @@ void loop()
   if (position > 65)
   {
     targetSpeed = 255;
-    Serial.print("ERROR");
     position = 5;
   }
 
@@ -128,16 +127,14 @@ void loop()
   if (hallLineState && !hallLinePrevState)
   { // passed sensor hallLine
     targetSpeed = 255;
-    Serial.println("pass LINE");
     position = 0;
   }
   if (!hallLineState && hallLinePrevState)
   { // On sensor hallLine
-    Serial.println("ON LINE");
     position = 0;
     currentSpeed = 0;
     targetSpeed = 0;
-    if (racing == 1)
+    if (isRacing == 1)
     {
       lapCounter++;
     }
@@ -154,10 +151,9 @@ void loop()
 
   if (!hallLineState && !hallLinePrevState)
   { // still on sensor hallLine
-    if (resetting && timeElapsed > 4000)
+    if (isResetting && timeElapsed > 4000)
     {
-      Serial.println("Done Resetting");
-      resetting = 0;
+      isResetting = 0;
       allLEDS(0, 0, 0);
       strip.setPixelColor(45, 139, 0, 139); // set color purple to create virtual pace car
       strip.setPixelColor(46, 139, 0, 139); //
@@ -167,7 +163,7 @@ void loop()
     }
   }
 
-  if (resetting == 1 && timeElapsed > 2000)
+  if (isResetting == 1 && timeElapsed > 2000)
   { // 2 sec delay after Solar lamp is off, then kick in motor reset.
     analogWrite(MotorPIN, currentSpeed);
   }
@@ -177,37 +173,36 @@ void loop()
     currentSpeed = 0;
   }
 
-  if (resetting == 0 && racing == 0)
+  if (isResetting == 0 && isRacing == 0)
   { // ready to race, waiting button press
 
     waitToStart();
   }
 
-  if (racing == 1)
+  if (isRacing == 1)
   {
     // change LED timing ring
     if (currentMillis - previousTimingMillis >= timeToRace / (strip.numPixels() * lapsToWin))
     {
       previousTimingMillis = currentMillis;
 
-      strip.setPixelColor(timingIndexLED, 139, 0, 139); // turn front LED on.
-      int timingIndexLEDoff = timingIndexLED - 4;
-      if (timingIndexLEDoff < 0)
+      strip.setPixelColor(paceCarFirstLED, 139, 0, 139); // turn front LED on.
+      int paceCarFirstLEDoff = paceCarFirstLED - 4;
+      if (paceCarFirstLEDoff < 0)
       {
-        timingIndexLEDoff = timingIndexLEDoff + 48;
+        paceCarFirstLEDoff = paceCarFirstLEDoff + 48;
       }
-      strip.setPixelColor(timingIndexLEDoff, 0, 0, 0); // turn back LED off.
+      strip.setPixelColor(paceCarFirstLEDoff, 0, 0, 0); // turn back LED off.
       strip.show();
-      timingIndexLED++;
-      if (timingIndexLED == 48)
+      paceCarFirstLED++;
+      if (paceCarFirstLED == 48)
       {
-        timingIndexLED = 0;
+        paceCarFirstLED = 0;
       }
     }
 
     if (lapCounter == lapsToWin)
     {
-      Serial.write(timeElapsed);
       endRace(1);
     }
 
@@ -219,8 +214,7 @@ void loop()
 }
 
 void waitToStart()
-{ // wait for user to press start button.
-  Serial.println("Waiting for button press");
+{                                 // wait for user to press start button.
   digitalWrite(EasyBtnLED, HIGH); //light Start button telling visitor they can play!
   digitalWrite(MedBtnLED, HIGH);  //light Start button telling visitor they can play!
   digitalWrite(HardBtnLED, HIGH); //light Start button telling visitor they can play!
@@ -236,28 +230,24 @@ void waitToStart()
     {
       timeToRace = easyTime;
       is_waiting = false;
-      Serial.print("easy time: ");
     }
     if (digitalRead(HardStartBtn) == LOW)
     {
       timeToRace = hardTime;
       is_waiting = false;
-      Serial.print("hard time: ");
     }
     if (digitalRead(MedStartBtn) == LOW)
     {
       timeToRace = (easyTime + hardTime) / 2;
       is_waiting = false;
-      Serial.print("med time: ");
     }
   }
 
-  racing = 1;
-  timingIndexLED = 0; // LED 11 is starting line.
-  resetting = 0;
+  isRacing = 1;
+  paceCarFirstLED = 0;
+  isResetting = 0;
   timeElapsed = 0;
   currentSpeed = 0;
-  Serial.println(timeToRace / 1000);
 
   digitalWrite(EasyBtnLED, LOW);
   digitalWrite(MedBtnLED, LOW);
@@ -270,7 +260,7 @@ void waitToStart()
     strip.setPixelColor(i, 0, 0, 0); // turn off starting light LEDS
   }
   strip.show();
-  analogWrite(LightRelayPIN, 255);               // turn the lamp full on.
+  analogWrite(lampPIN, 255);                     // turn the lamp full on.
   previousTimingMillis = startMillis = millis(); //record start time, initialize perviousTimingMillis for new race.
   lapCounter = 0;
 }
@@ -278,9 +268,9 @@ void waitToStart()
 void endRace(int hw)
 {
   hasWon = hw;
-  analogWrite(LightRelayPIN, 5); // lamp is "off" at 5/255 (about 2%) power to keep the filament warm and increase lamp life.
-  racing = 0;
-  resetting = 1;
+  analogWrite(lampPIN, 5); // lamp is "off" at 5/255 (about 2%) power to keep the filament warm and increase lamp life.
+  isRacing = 0;
+  isResetting = 1;
   ledState = 0;
   startMillis = millis();
 }
