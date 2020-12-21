@@ -9,8 +9,8 @@ It also determines when the race is over and uses a motor to reset the solar car
 
 
 This code is based on the 1-year prototype that has been in use at GTS for over a year. 
-A few months ago I added two new features:
+A few months ago two new features were added:
 - wheel encoder instead of 2nd hall sensor for better position tracking
 - PWM halogen bulb control so "off" still keeps the bulb warm which should lead to longer bulb life.
 
-Now as I commit changes for the final, I realize I could have written much cleaner code. I apologize if it is hard to follow, I don't foresee more features being added at this point and since I have working code I am not going to rewrite it. 
+Now as I commit changes for the final, I realize I could have written much cleaner code. I apologize if it is hard to follow, I don't foresee more features being added at this point and since I have working code I am not going to rewrite it.  -Joe
