@@ -12,20 +12,20 @@ private:
   bool isActiveHigh;
   int pwmPin;
   int interval;
-  int pwmPerInterval;
+  int changePerInterval;
   unsigned long currentMillis, millisLastChange;
   int percentToPWM(int);
 
 public:
   bool isRamping = false;
-  Ramp(bool, int);      // isActiveHigh, pin, time (millis to go 0 to 100%)
-  void setPercent(int); //immediately set to percent 0-100
-  int getPercent();
-  void rampTo(int, long);
-  void update();
+  Ramp(bool, int);        // isActiveHigh, pin
+  void setPercent(int);   //immediately set to percent 0-100
+  int getPercent();       //returns the percent it's currently at
+  void rampTo(int, long); //percent and how many millis to get there.
+  void update();          //place in loop
 };
 
-Ramp::Ramp(bool _isActiveHigh = true, int _pin = 13)
+Ramp::Ramp(bool _isActiveHigh = true, int _pin = 3)
 {
   isActiveHigh = _isActiveHigh;
   pwmPin = _pin;
@@ -41,7 +41,11 @@ void Ramp::setPercent(int percent) // convenience function to instantly set the 
 
 int Ramp::getPercent()
 {
-  return map(currentDutyCycle, 0, 255, 0, 100);
+  int percent;
+  percent = map(currentDutyCycle, 0, 255, 0, 100);
+  if (!isActiveHigh)
+    percent = 100 - percent;
+  return percent;
 }
 
 void Ramp::rampTo(int percent, long time)
@@ -49,7 +53,10 @@ void Ramp::rampTo(int percent, long time)
   targetDutyCycle = percentToPWM(percent);
 
   if (currentDutyCycle == targetDutyCycle)
+  {
+    isRamping = false;
     return;
+  }
 
   if (time == 0)
   {
@@ -66,24 +73,17 @@ void Ramp::rampTo(int percent, long time)
   if (delta > time)
   {
     interval = 1;
-    pwmPerInterval = delta / time;
+    changePerInterval = delta / time;
   }
-
-  if (delta < time)
+  else if (delta < time)
   {
-    pwmPerInterval = 1;
-    Serial.println(time);
-    Serial.println(delta);
+    changePerInterval = 1;
     interval = time / delta;
   }
 
+  // if delta was negative
   if ((targetDutyCycle - currentDutyCycle) < 0)
-    pwmPerInterval = -pwmPerInterval;
-
-  Serial.print("interval: ");
-  Serial.println(interval);
-  Serial.print("pwm change per interval: ");
-  Serial.println(pwmPerInterval);
+    changePerInterval = -changePerInterval;
 }
 
 void Ramp::update()
@@ -97,18 +97,16 @@ void Ramp::update()
     if ((currentMillis - millisLastChange) >= interval)
     {
       int numIntervals = (currentMillis - millisLastChange) / interval;
-      currentDutyCycle += (pwmPerInterval * numIntervals);
-      if (pwmPerInterval > 0)
+      currentDutyCycle += (changePerInterval * numIntervals);
+
+      //prevent overshooting.
+      if (changePerInterval > 0)
         currentDutyCycle = constrain(currentDutyCycle, 0, targetDutyCycle);
-      else if (pwmPerInterval < 0)
+      else if (changePerInterval < 0)
         currentDutyCycle = constrain(currentDutyCycle, targetDutyCycle, 255);
       analogWrite(pwmPin, currentDutyCycle);
       if (targetDutyCycle == currentDutyCycle)
         isRamping = false;
-      // Serial.print("current:");
-      // Serial.println(currentDutyCycle);
-      // Serial.print("target:");
-      // Serial.println(targetDutyCycle);
       millisLastChange = currentMillis;
     }
   }
