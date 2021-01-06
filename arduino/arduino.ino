@@ -7,7 +7,8 @@
 #include <Arduino.h>
 #include "Ramp.h"
 
-Ramp halogen(false, 3); // pwm via Mosfet of halogen lamp
+Ramp halogen(false, 3);
+Ramp motor(true, 10);
 
 const int HardStartBtn = 4;
 const int HardBtnLED = 5;
@@ -15,7 +16,6 @@ const int HallLinePIN = 6; // hall sensor input on starting/finish line
 const int LEDRingPIN = 7;  // neopixel pin
 const int MedStartBtn = 8;
 const int MedBtnLED = 9;
-const int MotorPIN = 10;   // pwm signal on this pin drives motor speed
 const int EncoderPIN = 11; // signal from encoder determines car position.
 const int EasyStartBtn = 12;
 const int EasyBtnLED = 13;
@@ -25,22 +25,17 @@ const int HardTimePot = A2; // potentiometer used to set had race time for win.
 const int NUM_LEDS = 48;
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, LEDRingPIN, NEO_RGB + NEO_KHZ800);
 
-int lapsToWin = 1;       // The number of laps to be completed for win.
-long timeToRace = 20000; // in millisec, time you have to complete the designated # of laps.
+long timeToRace = 20000; // in millisec, time you have to complete a lap.
 
 bool isResetting = 1, isRacing = 0, hasWon = 1, ledState = 0, encoderLastRead = 0; // flags
-int lapCounter, currentSpeed = 0, targetSpeed, position;
+int lapCounter, position;
 int paceCarFirstLED; // index number for neopixel strip to create 4 pixel pace car.
-unsigned long startMillis = 0, previousTimingMillis, previousBlinkMillis, previousRampMillis, currentMillis = 0;
+unsigned long startMillis = 0, previousTimingMillis, previousBlinkMillis, currentMillis = 0;
 long timeElapsed = 0;
 int hallLineState = 0, hallLinePrevState; // variables for edge detection of the hall sensor
 
 void setup()
 {
-  //neo pixels
-  strip.begin();
-  allLEDS(0, 0, 255); //all leds to blue, show life!
-
   pinMode(HallLinePIN, INPUT_PULLUP);
   pinMode(HardStartBtn, INPUT);
   pinMode(HardBtnLED, OUTPUT);
@@ -48,12 +43,13 @@ void setup()
   pinMode(MedBtnLED, OUTPUT);
   pinMode(EasyStartBtn, INPUT);
   pinMode(EasyBtnLED, OUTPUT);
-  pinMode(MotorPIN, OUTPUT);
   pinMode(EncoderPIN, INPUT);
   pinMode(EasyTimePot, INPUT);
   pinMode(HardTimePot, INPUT);
 
-  analogWrite(MotorPIN, 0);
+  //neo pixels
+  strip.begin();
+  allLEDS(0, 0, 255); //all leds to blue, show life!
   delay(1000);
   allLEDS(0, 0, 0); // turn leds off
 }
@@ -109,19 +105,16 @@ void loop()
 
   if ((position > 45) && (position < 56))
   {
-    targetSpeed = 255 - (position - 45) * 20;
-    if (currentSpeed > targetSpeed)
-      currentSpeed = targetSpeed;
+    int t = 100 - (position - 45) * 8;
+    motor.setPercent(t);
   }
   if (position > 55)
   {
-    targetSpeed = 40;
-    if (currentSpeed > targetSpeed)
-      currentSpeed = targetSpeed;
+    motor.rampTo(15, 100);
   }
   if (position > 65)
   {
-    targetSpeed = 255;
+    motor.rampTo(100, 1000);
     position = 5;
   }
 
