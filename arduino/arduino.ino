@@ -4,8 +4,11 @@
 
 #include <Adafruit_NeoPixel.h>
 #include <Wire.h>
+#include <Arduino.h>
+#include "Ramp.h"
 
-const int lampPIN = 3; // pwm via Mosfet of halogen lamp
+Ramp halogen(false, 3); // pwm via Mosfet of halogen lamp
+
 const int HardStartBtn = 4;
 const int HardBtnLED = 5;
 const int HallLinePIN = 6; // hall sensor input on starting/finish line
@@ -39,7 +42,6 @@ void setup()
   allLEDS(0, 0, 255); //all leds to blue, show life!
 
   pinMode(HallLinePIN, INPUT_PULLUP);
-  pinMode(lampPIN, OUTPUT);
   pinMode(HardStartBtn, INPUT);
   pinMode(HardBtnLED, OUTPUT);
   pinMode(MedStartBtn, INPUT);
@@ -248,7 +250,7 @@ void waitToStart()
   isResetting = 0;
   timeElapsed = 0;
   currentSpeed = 0;
-
+  halogen.rampTo(30, 1000); // warm lamp up.
   digitalWrite(EasyBtnLED, LOW);
   digitalWrite(MedBtnLED, LOW);
   digitalWrite(HardBtnLED, LOW);
@@ -260,7 +262,7 @@ void waitToStart()
     strip.setPixelColor(i, 0, 0, 0); // turn off starting light LEDS
   }
   strip.show();
-  analogWrite(lampPIN, 255);                     // turn the lamp full on.
+  halogen.rampTo(100, 100);                      // turn the lamp full on.
   previousTimingMillis = startMillis = millis(); //record start time, initialize perviousTimingMillis for new race.
   lapCounter = 0;
 }
@@ -268,7 +270,7 @@ void waitToStart()
 void endRace(int hw)
 {
   hasWon = hw;
-  analogWrite(lampPIN, 5); // lamp is "off" at 5/255 (about 2%) power to keep the filament warm and increase lamp life.
+  halogen.rampTo(5, 500); // fade lamp off quick.
   isRacing = 0;
   isResetting = 1;
   ledState = 0;
