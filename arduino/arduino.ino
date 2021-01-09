@@ -25,8 +25,8 @@ const int HardTimePot = A2; // potentiometer used to set had race time for win.
 const int NUM_LEDS = 48;
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, LEDRingPIN, NEO_RGB + NEO_KHZ800);
 
-int lapsToWin = 1;       // The number of laps to be completed for win.
-long timeToRace = 20000; // in millisec, time you have to complete the designated # of laps.
+int lapsToWin = 1, rainbow = 0; // The number of laps to be completed for win.
+long timeToRace = 20000;        // in millisec, time you have to complete the designated # of laps.
 
 bool isResetting = 1, isRacing = 0, hasWon = 1, ledState = 0, encoderLastRead = 0; // flags
 int lapCounter, currentSpeed = 0, targetSpeed, position;
@@ -62,6 +62,7 @@ void loop()
 {
   currentMillis = millis();
   timeElapsed = currentMillis - startMillis;
+  halogen.update();
 
   //increments position from change in encoder beam break.
   int encoderRead = digitalRead(EncoderPIN);
@@ -74,15 +75,14 @@ void loop()
   // blink lights during reset according to win or lose.
   if (isResetting)
   {
-    int j = 0;
     if (hasWon)
     { // create rainbow pattern.
       for (int i = 0; i < strip.numPixels(); i++)
       {
-        strip.setPixelColor(i, Wheel((i + j) & 255));
+        strip.setPixelColor(i, Wheel((i + rainbow) & 255));
       }
       strip.show();
-      j++;
+      rainbow++;
     }
     else
     { // lose lights, blinking red, ledState toggles off/on
@@ -270,6 +270,7 @@ void waitToStart()
 void endRace(int hw)
 {
   hasWon = hw;
+  rainbow = 0;
   halogen.rampTo(5, 500); // fade lamp off quick.
   isRacing = 0;
   isResetting = 1;
@@ -283,6 +284,7 @@ void colorWipe(int wait, int R, int G, int B)
   {
     strip.setPixelColor(15 - i, R, G, B); //color wipe
     delay(wait);
+    halogen.update();
     strip.show();
   }
 }
