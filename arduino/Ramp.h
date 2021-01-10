@@ -15,14 +15,17 @@ private:
   int changePerInterval;
   unsigned long currentMillis, millisLastChange;
   int percentToPWM(int);
+  void calcRampSpeed(int, long);
 
 public:
   bool isRamping = false;
-  Ramp(bool, int);        // isActiveHigh, pin
-  void setPercent(int);   //immediately set to percent 0-100
-  int getPercent();       //returns the percent it's currently at
-  void rampTo(int, long); //percent and how many millis to get there.
-  void update();          //place in loop
+  Ramp(bool, int);             // isActiveHigh, pin
+  void setFullRampSpeed(long); //time (millis) for full swing
+  void setPercent(int);        //immediately set to percent 0-100
+  int getPercent();            //returns the percent it's currently at
+  void rampTo(int, long);      //percent and how many millis to get there.
+  void rampTo(int);            //percent to get to using the set RampSpeed;
+  void update();               //place in loop
 };
 
 Ramp::Ramp(bool _isActiveHigh = true, int _pin = 3)
@@ -34,9 +37,18 @@ Ramp::Ramp(bool _isActiveHigh = true, int _pin = 3)
   currentDutyCycle = targetDutyCycle = percentToPWM(0);
 }
 
-void Ramp::setPercent(int percent) // convenience function to instantly set the percentage
+void Ramp::setPercent(int percent) // instantly set the percentage
 {
-  this->rampTo(percent, 0);
+  targetDutyCycle = percentToPWM(percent);
+  currentDutyCycle = targetDutyCycle;
+  analogWrite(pwmPin, currentDutyCycle);
+  isRamping = false;
+  return;
+}
+
+void Ramp::setFullRampSpeed(long time) //time for full swing
+{
+  calcRampSpeed(percentToPWM(100), time);
 }
 
 int Ramp::getPercent()
@@ -48,67 +60,67 @@ int Ramp::getPercent()
   return percent;
 }
 
-void Ramp::rampTo(int percent, long time)
+void Ramp::rampTo(int percent) //uses the last ramp speed.
 {
+  if (percentToPWM(percent) == targetDutyCycle)
+    return;
   targetDutyCycle = percentToPWM(percent);
 
+  millisLastChange = millis();
+  if ((targetDutyCycle - currentDutyCycle) < 0)
+    changePerInterval = -changePerInterval;
+}
+
+void Ramp::rampTo(int percent, long time) // go to percent in given time.
+{
+  targetDutyCycle = percentToPWM(percent);
+  int delta = abs(targetDutyCycle - currentDutyCycle);
+  calcRampSpeed(delta, time);
+
+  millisLastChange = millis();
+}
+
+void Ramp::update()
+{
   if (currentDutyCycle == targetDutyCycle)
   {
     isRamping = false;
     return;
   }
+  else
+    isRamping = true;
 
-  if (time == 0)
-  {
-    currentDutyCycle = targetDutyCycle;
-    analogWrite(pwmPin, currentDutyCycle);
-    isRamping = false;
-    return;
-  }
-
-  int delta = abs(targetDutyCycle - currentDutyCycle);
-  isRamping = true;
-  millisLastChange = millis();
-
-  if (delta > time)
-  {
-    interval = 1;
-    changePerInterval = delta / time;
-  }
-  else if (delta < time)
-  {
-    changePerInterval = 1;
-    interval = time / delta;
-  }
-
-  // if delta was negative
   if ((targetDutyCycle - currentDutyCycle) < 0)
     changePerInterval = -changePerInterval;
+
+  currentMillis = millis();
+
+  if ((currentMillis - millisLastChange) >= interval)
+  {
+    int numIntervals = (currentMillis - millisLastChange) / interval;
+    currentDutyCycle += (changePerInterval * numIntervals);
+
+    //prevent overshooting.
+    if (changePerInterval > 0)
+      currentDutyCycle = constrain(currentDutyCycle, 0, targetDutyCycle);
+    else if (changePerInterval < 0)
+      currentDutyCycle = constrain(currentDutyCycle, targetDutyCycle, 255);
+    analogWrite(pwmPin, currentDutyCycle);
+    millisLastChange = currentMillis;
+  }
 }
 
-void Ramp::update()
+void Ramp::calcRampSpeed(int dutyCycle, long time)
 {
-  if (!isRamping)
-    return;
-  else
+  if (dutyCycle > time)
   {
-    currentMillis = millis();
-
-    if ((currentMillis - millisLastChange) >= interval)
-    {
-      int numIntervals = (currentMillis - millisLastChange) / interval;
-      currentDutyCycle += (changePerInterval * numIntervals);
-
-      //prevent overshooting.
-      if (changePerInterval > 0)
-        currentDutyCycle = constrain(currentDutyCycle, 0, targetDutyCycle);
-      else if (changePerInterval < 0)
-        currentDutyCycle = constrain(currentDutyCycle, targetDutyCycle, 255);
-      analogWrite(pwmPin, currentDutyCycle);
-      if (targetDutyCycle == currentDutyCycle)
-        isRamping = false;
-      millisLastChange = currentMillis;
-    }
+    interval = 1;
+    changePerInterval = dutyCycle / time;
+  }
+  else if (dutyCycle < time)
+  {
+    changePerInterval = 1;
+    interval = time / dutyCycle;
   }
 }
 
