@@ -7,7 +7,7 @@
 #include <Arduino.h>
 #include "Ramp.h"
 
-Ramp halogen(false, 3); // pwm via Mosfet of halogen lamp
+Ramp halogen(true, 3); // pwm via Mosfet of halogen lamp
 
 const int HardStartBtn = 4;
 const int HardBtnLED = 5;
