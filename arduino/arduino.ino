@@ -23,18 +23,22 @@ const int EasyTimePot = A0; // potentiometer used to set easy race time for win.
 const int HardTimePot = A2; // potentiometer used to set had race time for win.
 
 const int NUM_LEDS = 48;
+
+// pwm value (0-255) of power for motor to assist during the race.
+// a value of 30 caused the car to drive without any solar power.
+int motorAssist = 22;
+
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, LEDRingPIN, NEO_RGB + NEO_KHZ800);
+int rainbow = 0;
+long timeToRace = 20000; // in millisec, time you have to complete a lap.
 
-int lapsToWin = 1, rainbow = 0; // The number of laps to be completed for win.
-long timeToRace = 20000;        // in millisec, time you have to complete the designated # of laps.
-
-bool isResetting = 1, isRacing = 0, hasWon = 1, ledState = 0, encoderLastRead = 0;
-int lapCounter, currentSpeed = 0, targetSpeed, position;
+bool isResetting = 1, isRacing = 0, hasWon = 0, ledState = 0, encoderLastRead = 0;
+int currentSpeed = 0, targetSpeed, position = 70;
 int paceCarFirstLED; // index number for neopixel strip to create 4 pixel pace car.
 unsigned long startMillis = 0, previousTimingMillis, previousBlinkMillis,
               previousRampMillis, currentMillis = 0;
 long timeElapsed = 0;
-int hallLineState = 0,
+int hallLineState,
     hallLinePrevState; // variables for edge detection of the hall sensor
 
 void setup()
@@ -42,6 +46,7 @@ void setup()
   // neo pixels
   strip.begin();
   allLEDS(0, 0, 255); // all leds to blue, show life!
+  delay(1000);
 
   pinMode(HallLinePIN, INPUT_PULLUP);
   pinMode(HardStartBtn, INPUT);
@@ -54,7 +59,10 @@ void setup()
   pinMode(EncoderPIN, INPUT);
   pinMode(EasyTimePot, INPUT);
   pinMode(HardTimePot, INPUT);
+  startMillis = millis();
 
+  hallLineState = digitalRead(HallLinePIN);
+  analogWrite(MotorPIN, 0);
   allLEDS(0, 0, 0); // turn leds off
 }
 
@@ -121,8 +129,7 @@ void loop()
   }
   if (position > 65)
   {
-    targetSpeed = 255;
-    position = 5;
+    targetSpeed = 50;
   }
 
   // edge detection
@@ -138,17 +145,7 @@ void loop()
     targetSpeed = 0;
     if (isRacing == 1)
     {
-      lapCounter++;
-    }
-  }
-
-  // every 5 ms check if speed should increase
-  if (currentMillis - previousRampMillis >= 5)
-  {
-    previousRampMillis = currentMillis;
-    if (currentSpeed < targetSpeed)
-    { // increase speed by 1 if below target.
-      currentSpeed = currentSpeed + 1;
+      endRace(1);
     }
   }
 
@@ -157,6 +154,8 @@ void loop()
     if (isResetting && timeElapsed > 4000)
     {
       isResetting = 0;
+      analogWrite(MotorPIN, 0);
+      currentSpeed = 0;
       allLEDS(0, 0, 0);
       strip.setPixelColor(45, 139, 0, 139); // set color purple to create virtual pace car
       strip.setPixelColor(46, 139, 0, 139); //
@@ -170,11 +169,15 @@ void loop()
   if (isResetting == 1 && timeElapsed > 2000)
   {
     analogWrite(MotorPIN, currentSpeed);
-  }
-  else
-  {
-    analogWrite(MotorPIN, 0);
-    currentSpeed = 0;
+    // every 5 ms check if speed should increase
+    if (currentMillis - previousRampMillis >= 5)
+    {
+      previousRampMillis = currentMillis;
+      if (currentSpeed < targetSpeed)
+      { // increase speed by 1 if below target.
+        currentSpeed = currentSpeed + 1;
+      }
+    }
   }
 
   // ready to race, waiting button press
@@ -184,8 +187,7 @@ void loop()
   if (isRacing == 1)
   {
     // change LED timing ring
-    if (currentMillis - previousTimingMillis >=
-        timeToRace / (strip.numPixels() * lapsToWin))
+    if ((currentMillis - previousTimingMillis) >= (timeToRace / strip.numPixels()))
     {
       previousTimingMillis = currentMillis;
 
@@ -201,9 +203,6 @@ void loop()
       if (paceCarFirstLED == 48)
         paceCarFirstLED = 0;
     }
-
-    if (lapCounter == lapsToWin)
-      endRace(1);
 
     if (timeElapsed > timeToRace)
       endRace(0);
@@ -269,9 +268,9 @@ void waitToStart() // wait for user to press start button.
   strip.show();
   // turn the lamp full on.
   halogen.rampTo(100, 100);
+  analogWrite(MotorPIN, motorAssist); // Motor assist because halogen doesn't supply quite enough power.
   // record start time, initialize perviousTimingMillis for new race.
   previousTimingMillis = startMillis = millis();
-  lapCounter = 0;
 }
 
 void endRace(int hw)
